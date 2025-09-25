@@ -1,0 +1,14 @@
+{% extends "layout.html" %}
+
+{% block title %}
+Memo
+{% endblock %}
+
+{% block content %}
+<h1 class="text-center mt-4">Are you sure that you want to delete</h1>
+<form method="post">
+    {% csrf_token %}
+    <button class="btn btn-danger">Delete</button>
+    <button href="{% url 'memo_list'%}" class="btn btn-success">Back</button>
+</form>
+{% endblock %}

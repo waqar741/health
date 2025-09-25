@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+
+{% block title %}Memo{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="text-center mb-4">Add or Edit Your Memo</h2>
+
+    <div class="card shadow p-4">
+        <h4 class="mb-3">
+            {% if form.instance.pk %}
+                ✏️ Edit Memo
+            {% else %}
+                📝 Create Memo
+            {% endif %}
+        </h4>
+
+        <form method="post" enctype="multipart/form-data" class="form">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <div class="d-flex justify-content-between mt-3">
+                <a href="{% url 'memo_list' %}" class="btn btn-secondary">← Back to List</a>
+                <button class="btn btn-warning" type="submit">💾 Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "layout.html" %}
+
+{% block title %}
+  Memo
+{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <h2 class="text-center mb-4">Lets revise your Memo</h1>
+
+
+  <div class="text-center mb-4">
+    <a href="{% url 'memo_create' %}" class="btn btn-primary">Create New Memory</a>
+  </div>
+
+  <div class="row justify-content-center g-4">
+    {% for memo in memos %}
+      <div class="col-md-6 col-lg-4">
+        <div class="card h-100 shadow-sm">
+
+          {% if memo.photo %}
+            <img src="{{ memo.photo.url }}" class="card-img-top" alt="Memo image">
+          {% endif %}
+
+        
+          <div class="card-body d-flex flex-column">
+            <h5 class="card-title">{{ memo.user.username }}</h5>
+            <p class="card-text">{{ memo.text }}</p>
+            <p class="card-text">
+              <small class="text-muted">
+                Last updated {{ memo.updated_at|timesince }} ago
+              </small>
+            </p>
+
+            <div class="mt-auto d-flex justify-content-end">
+              <a href="{% url 'memo_edit' memo.id %}" class="btn btn-sm btn-outline-primary me-2">Edit</a>
+              <a href="{% url 'memo_delete' memo.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% empty %}
+      <div class="col-12 text-center">
+        <p class="text-muted">No memos available.</p>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
