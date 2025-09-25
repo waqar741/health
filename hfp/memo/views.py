@@ -4,6 +4,9 @@ from .forms import MemoForm ,UserRegistrationForm
 from django.shortcuts import get_object_or_404,redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login
+from django import forms
+from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.models import User
 
 # Create your views here.
 def index(request):
@@ -60,3 +63,10 @@ def register(request):
     else:
         form = UserRegistrationForm()
     return render(request,'registration/register.html',{'form':form})
+
+class UserRegistrationForm(UserCreationForm):
+    email = forms.EmailField(required=True)
+
+    class Meta:
+        model = User
+        fields = ('username', 'email', 'password1', 'password2')
