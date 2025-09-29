@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
             name='Memo',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('text', models.TextField(max_length=200)),
+                ('text', models.TextField(max_length=2000)),
                 ('photo', models.ImageField(blank=True, null=True, upload_to='photos/')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
