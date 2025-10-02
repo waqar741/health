@@ -8,7 +8,7 @@
 
     <div class="card shadow p-4">
         <h4 class="mb-3">
-            {% if form.instance.pk %}
+            {% if is_edit %}
                 ✏️ Edit Note
             {% else %}
                 📝 Create Note
@@ -26,3 +26,4 @@
     </div>
 </div>
 {% endblock %}
+

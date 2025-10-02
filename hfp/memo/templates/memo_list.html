@@ -12,32 +12,34 @@
     <a href="{% url 'memo_create' %}" class="btn btn-primary">Create New Note</a>
   </div>
 
-  <div class="row justify-content-center g-4 ">
-  
+  <div class="row justify-content-center g-4">
     {% for memo in memos %}
-      {% if memo.user == user %}
-        <div class="col-md-6 col-lg-4">
-  <div class="card h-100 shadow-sm d-flex flex-column">
+      <div class="col-md-6 col-lg-4">
+        <div class="card h-100 shadow-sm d-flex flex-column">
 
-    <div class="card-body d-flex flex-column text-center">
+          <div class="card-body d-flex flex-column text-center">
+            <p class="card-text fw-semibold mb-3">{{ memo.text }}</p>
 
-      <p class="card-text fw-semibold mb-3">{{ memo.text }}</p>
-      {% if memo.photo %}
-        <img src="{{ memo.photo.url }}" class="card-img my-3 mx-auto d-block" alt="Memo image" style="max-height:200px; object-fit:cover; width:auto;">
-      {% endif %}
-    </div>
-      <p class="card-text text-start ms-3">
-      <small class="text-muted">Last updated {{ memo.updated_at|timesince }} ago</small>
-      </p>
+            {% if memo.photo %}
+              <img src="{{ memo.photo }}" 
+                   class="card-img my-3 mx-auto d-block" 
+                   alt="Memo image" 
+                   style="max-height:200px; object-fit:cover; width:auto;">
+            {% endif %}
+          </div>
 
-    <div class="card-footer bg-transparent border-0 d-flex justify-content-between ms-2000">
-      <a href="{% url 'memo_edit' memo.id %}" class="btn btn-sm btn-outline-primary">Edit</a>
-      <a href="{% url 'memo_delete' memo.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
-    </div>
-  </div>
-</div>
+          {% if memo.updated_at %}
+            <p class="card-text text-start ms-3">
+              <small class="text-muted">Last updated {{ memo.updated_at }}</small>
+            </p>
+          {% endif %}
 
-      {% endif %}
+          <div class="card-footer bg-transparent border-0 d-flex justify-content-between">
+            <a href="{% url 'memo_edit' memo.id %}" class="btn btn-sm btn-outline-primary">Edit</a>
+            <a href="{% url 'memo_delete' memo.id %}" class="btn btn-sm btn-outline-danger">Delete</a>
+          </div>
+        </div>
+      </div>
     {% empty %}
       <div class="col-12 text-center">
         <p class="text-muted">No Notes available.</p>

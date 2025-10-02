@@ -41,6 +41,9 @@ INSTALLED_APPS = [
     'memo',
 ]
 
+API_BASE_URL = 'http://127.0.0.1:8001/api'
+
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',

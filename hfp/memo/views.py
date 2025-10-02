@@ -1,72 +1,102 @@
-from django.shortcuts import render
-from .models import Memo
-from .forms import MemoForm ,UserRegistrationForm
-from django.shortcuts import get_object_or_404,redirect
-from django.contrib.auth.decorators import login_required
-from django.contrib.auth import login
-from django import forms
-from django.contrib.auth.forms import UserCreationForm
-from django.contrib.auth.models import User
+# memo/views.py
+from django.shortcuts import render, redirect
+from django.urls import reverse
+from .forms import LoginForm, NoteForm
+from . import api_client
+from django.contrib import messages
 
-# Create your views here.
-def index(request):
-    return render(request, 'index.html')
+def login_view(request):
+    if request.method == "POST":
+        form = LoginForm(request.POST)
+        if form.is_valid():
+            tokens = api_client.obtain_token(form.cleaned_data["username"], form.cleaned_data["password"])
+            if tokens and "access" in tokens:
+                request.session["access"] = tokens["access"]
+                request.session["refresh"] = tokens.get("refresh")
+                return redirect("memo_list")
+            else:
+                form.add_error(None, "Invalid credentials")
+    else:
+        form = LoginForm()
+    return render(request, "registration/login.html", {"form": form})
+
+def logout_view(request):
+    request.session.pop("access", None)
+    request.session.pop("refresh", None)
+    return redirect("login")
 
 def memo_list(request):
-    memos =Memo.objects.all().order_by('-created_at')
-    return render(request,'memo_list.html',{'memos':memos})
+    # ensure logged in
+    if not request.session.get("access"):
+        return redirect("login")
+    res = api_client.api_request(request, "GET", "api/notes/")
+    notes = res.json() if res.ok else []
+    return render(request, "memo_list.html", {"notes": notes})
 
-@login_required
 def memo_create(request):
-    if request.method== "POST":
-      form = MemoForm(request.POST,request.FILES)
-      if form.is_valid():
-          memo= form.save(commit=False)
-          memo.user =request.user
-          memo.save()
-          return redirect('memo_list')
-    else:
-        form =MemoForm()
-    return render(request,'memo_form.html',{'form':form})
-
-@login_required
-def memo_edit(request,memo_id):
-    memo=get_object_or_404(Memo,pk=memo_id,user = request.user)
-    if request.method == 'POST':
-        form = MemoForm(request.POST,request.FILES,instance=memo)
+    if not request.session.get("access"):
+        return redirect("login")
+    if request.method == "POST":
+        form = NoteForm(request.POST, request.FILES)
         if form.is_valid():
-            memo= form.save(commit=False)
-            memo.user = request.user
-            memo.save()
-            return redirect('memo_list')
+            data = {
+                "title": form.cleaned_data["title"],
+                "content": form.cleaned_data["content"] or ""
+            }
+            files = None
+            if form.cleaned_data.get("photo"):
+                photo = request.FILES["photo"]
+                # requests expects file tuple or file-like; we'll send tuple (filename, bytes, content_type)
+                files = {"photo": (photo.name, photo.read(), photo.content_type)}
+            res = api_client.api_request(request, "POST", "api/notes/", data=data, files=files)
+            if res.status_code in (200, 201):
+                return redirect("memo_list")
+            else:
+                # show server error
+                messages.error(request, f"API error: {res.status_code} {res.text}")
     else:
-        form =MemoForm(instance=memo)
-    return render(request,'memo_form.html',{'form':form})
+        form = NoteForm()
+    return render(request, "memo_form.html", {"form": form, "action": "Create"})
 
-@login_required
-def memo_delete(request,memo_id):
-    memo=get_object_or_404(Memo,pk=memo_id,user = request.user)
-    if request.method == 'POST':
-        memo.delete()
-        return redirect('memo_list')
-    return render(request,'memo_confirm_delete.html',{'memo':memo})
-
-def register(request):
-    if request.method == 'POST':
-        form = UserRegistrationForm(request.POST)
+def memo_update(request, pk):
+    if not request.session.get("access"):
+        return redirect("login")
+    # fetch note to prefill form
+    res = api_client.api_request(request, "GET", f"api/notes/{pk}/")
+    if not res.ok:
+        messages.error(request, "Could not fetch note")
+        return redirect("memo_list")
+    note = res.json()
+    if request.method == "POST":
+        form = NoteForm(request.POST, request.FILES)
         if form.is_valid():
-            user = form.save(commit=False)
-            user.set_password(form.cleaned_data['password1'])
-            user.save()
-            login(request,user)
-            return redirect('memo_list')
+            data = {
+                "title": form.cleaned_data["title"],
+                "content": form.cleaned_data["content"] or ""
+            }
+            files = None
+            if form.cleaned_data.get("photo"):
+                photo = request.FILES["photo"]
+                files = {"photo": (photo.name, photo.read(), photo.content_type)}
+            res2 = api_client.api_request(request, "PUT", f"api/notes/{pk}/", data=data, files=files)
+            if res2.ok:
+                return redirect("memo_list")
+            messages.error(request, f"API error: {res2.status_code} {res2.text}")
     else:
-        form = UserRegistrationForm()
-    return render(request,'registration/register.html',{'form':form})
+        form = NoteForm(initial={"title": note.get("title"), "content": note.get("content")})
+    return render(request, "memo_form.html", {"form": form, "action": "Update"})
 
-class UserRegistrationForm(UserCreationForm):
-    email = forms.EmailField(required=True)
-
-    class Meta:
-        model = User
-        fields = ('username', 'email', 'password1', 'password2')
+def memo_delete(request, pk):
+    if not request.session.get("access"):
+        return redirect("login")
+    if request.method == "POST":
+        res = api_client.api_request(request, "DELETE", f"api/notes/{pk}/")
+        if res.status_code in (204, 200):
+            messages.success(request, "Deleted")
+        else:
+            messages.error(request, f"Delete failed: {res.status_code}")
+        return redirect("memo_list")
+    # optional: show confirmation page
+    res = api_client.api_request(request, "GET", f"api/notes/{pk}/")
+    note = res.json() if res.ok else {}
+    return render(request, "memo_confirm_delete.html", {"note": note})
