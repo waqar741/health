@@ -41,8 +41,8 @@
                     <button type="submit" class="btn btn-outline-danger">Logout</button>
                 </form>
             {% else %}
-                <a href="{% url 'login' %}" class="btn btn-outline-success me-2">Login</a>
-                <a href="{% url 'register' %}" class="btn btn-outline-primary">Register</a>
+                <a href="{% url 'memo:login' %}" class="btn btn-outline-success me-2">Login</a>
+                <a href="{% url 'memo:register' %}" class="btn btn-outline-primary">Register</a>
             {% endif %}
           </div>
         </div>

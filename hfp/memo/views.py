@@ -145,7 +145,7 @@ def register_view(request):
         })
 
         if response.status_code == 201:
-            return redirect("login")
+            return redirect("memo:login")
         else:
             error = response.json().get("error", "Registration failed")
             return render(request, "registration/register.html", {"error": error})
