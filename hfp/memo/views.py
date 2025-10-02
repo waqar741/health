@@ -1,74 +1,99 @@
-# memo/views.py
-from django.shortcuts import render, redirect
-from django.urls import reverse
-from .forms import LoginForm, NoteForm
-from . import api_client
+from django.shortcuts import render, redirect ,get_object_or_404
 from django.contrib import messages
+from .forms import  MemoForm
+import requests
+# from django.contrib import messages
+
+API_TOKEN_URL = "http://127.0.0.1:8001/api/token/"
+API_REGISTER_URL = "http://127.0.0.1:8001/api/register/"
+API_BASE = "http://127.0.0.1:8001/api/memos/"
+API_USERS = "http://127.0.0.1:8001/api/users/"
+
+
+def index(request):
+    return render(request, "index.html")
 
 def login_view(request):
     if request.method == "POST":
-        form = LoginForm(request.POST)
-        if form.is_valid():
-            tokens = api_client.obtain_token(form.cleaned_data["username"], form.cleaned_data["password"])
-            if tokens and "access" in tokens:
-                request.session["access"] = tokens["access"]
-                request.session["refresh"] = tokens.get("refresh")
-                return redirect("memo_list")
-            else:
-                form.add_error(None, "Invalid credentials")
-    else:
-        form = LoginForm()
-    return render(request, "registration/login.html", {"form": form})
+        username = request.POST.get("username")
+        password = request.POST.get("password")
 
-def logout_view(request):
-    request.session.pop("access", None)
-    request.session.pop("refresh", None)
-    return redirect("login")
+        response = requests.post(API_TOKEN_URL, data={
+            "username": username,
+            "password": password
+        })
+
+        if response.status_code == 200:
+            tokens = response.json()
+            access_token = tokens["access"]
+            refresh_token = tokens["refresh"]
+            response = redirect("memo_list")
+            response.set_cookie("access_token", access_token, httponly=True, samesite="Strict")
+            response.set_cookie("refresh_token", refresh_token, httponly=True, samesite="Strict")
+            return response
+        else:
+            error = "Invalid username or password"
+
+        return render(request, "registration/login.html", {"error": error})
+
+    return render(request, "registration/login.html")
 
 def memo_list(request):
-    # ensure logged in
-    if not request.session.get("access"):
+    access_token = request.COOKIES.get("access_token")
+    if not access_token:
         return redirect("login")
-    res = api_client.api_request(request, "GET", "api/notes/")
-    notes = res.json() if res.ok else []
-    return render(request, "memo_list.html", {"notes": notes})
+    headers = {"Authorization": f"Bearer {access_token}"}
+    res = requests.get(API_BASE, headers=headers)
+    memos = []
+    if res.ok:
+        memos = res.json()
+    else:
+        messages.error(request, f"Could not fetch memos. API responded with status {res.status_code}.")
+    return render(request, "memo_list.html", {"memos": memos})
+
 
 def memo_create(request):
-    if not request.session.get("access"):
+    access_token = request.COOKIES.get("access_token")
+    if not access_token:
         return redirect("login")
+    
     if request.method == "POST":
-        form = NoteForm(request.POST, request.FILES)
+        form = MemoForm(request.POST, request.FILES)
         if form.is_valid():
+            headers = {"Authorization": f"Bearer {access_token}"}
             data = {
                 "title": form.cleaned_data["title"],
                 "content": form.cleaned_data["content"] or ""
             }
-            files = None
+            files = {}
             if form.cleaned_data.get("photo"):
                 photo = request.FILES["photo"]
-                # requests expects file tuple or file-like; we'll send tuple (filename, bytes, content_type)
                 files = {"photo": (photo.name, photo.read(), photo.content_type)}
-            res = api_client.api_request(request, "POST", "api/notes/", data=data, files=files)
-            if res.status_code in (200, 201):
+            res = requests.post(API_BASE, headers=headers, data=data, files=files)
+
+            if res.status_code == 201:
                 return redirect("memo_list")
             else:
-                # show server error
                 messages.error(request, f"API error: {res.status_code} {res.text}")
     else:
-        form = NoteForm()
+        form = MemoForm()
     return render(request, "memo_form.html", {"form": form, "action": "Create"})
 
 def memo_update(request, pk):
-    if not request.session.get("access"):
+    access_token = request.COOKIES.get("access_token")
+    if not access_token:
         return redirect("login")
-    # fetch note to prefill form
-    res = api_client.api_request(request, "GET", f"api/notes/{pk}/")
+
+    headers = {"Authorization": f"Bearer {access_token}"}
+    url = f"{API_BASE}{pk}/"
+    res = requests.get(url, headers=headers)
     if not res.ok:
-        messages.error(request, "Could not fetch note")
+        messages.error(request, "Could not fetch memo to edit.")
         return redirect("memo_list")
-    note = res.json()
+    memo = res.json()
+
     if request.method == "POST":
-        form = NoteForm(request.POST, request.FILES)
+        form = MemoForm(request.POST, request.FILES)
         if form.is_valid():
             data = {
                 "title": form.cleaned_data["title"],
@@ -78,25 +103,58 @@ def memo_update(request, pk):
             if form.cleaned_data.get("photo"):
                 photo = request.FILES["photo"]
                 files = {"photo": (photo.name, photo.read(), photo.content_type)}
-            res2 = api_client.api_request(request, "PUT", f"api/notes/{pk}/", data=data, files=files)
+            res2 = requests.put(url, headers=headers, data=data, files=files)
             if res2.ok:
                 return redirect("memo_list")
-            messages.error(request, f"API error: {res2.status_code} {res2.text}")
+            else:
+                messages.error(request, f"API update error: {res2.status_code} {res2.text}")
     else:
-        form = NoteForm(initial={"title": note.get("title"), "content": note.get("content")})
+        form = MemoForm(initial={"title": memo.get("title"), "content": memo.get("content")})
+    
     return render(request, "memo_form.html", {"form": form, "action": "Update"})
 
+
 def memo_delete(request, pk):
-    if not request.session.get("access"):
+    access_token = request.COOKIES.get("access_token")
+    if not access_token:
         return redirect("login")
+
+    headers = {"Authorization": f"Bearer {access_token}"}
+    url = f"{API_BASE}{pk}/"
+
     if request.method == "POST":
-        res = api_client.api_request(request, "DELETE", f"api/notes/{pk}/")
-        if res.status_code in (204, 200):
-            messages.success(request, "Deleted")
+        response = requests.delete(url, headers=headers)
+        if response.status_code in [200, 204]:
+            return redirect("memo_list")
         else:
-            messages.error(request, f"Delete failed: {res.status_code}")
-        return redirect("memo_list")
-    # optional: show confirmation page
-    res = api_client.api_request(request, "GET", f"api/notes/{pk}/")
-    note = res.json() if res.ok else {}
-    return render(request, "memo_confirm_delete.html", {"note": note})
+            error = response.text
+            return render(request, "memo_confirm_delete.html", {"error": error})
+
+    return render(request, "memo_confirm_delete.html")
+
+def register_view(request):
+    if request.method == "POST":
+        username = request.POST.get("username")
+        password = request.POST.get("password")
+        email = request.POST.get("email")
+
+        response = requests.post(API_REGISTER_URL, data={
+            "username": username,
+            "password": password,
+            "email": email
+        })
+
+        if response.status_code == 201:
+            return redirect("login")
+        else:
+            error = response.json().get("error", "Registration failed")
+            return render(request, "registration/register.html", {"error": error})
+
+    return render(request, "registration/register.html")
+
+
+def logout_view(request):
+    response = redirect("login")
+    response.delete_cookie("access_token")
+    response.delete_cookie("refresh_token") 
+    return response 
